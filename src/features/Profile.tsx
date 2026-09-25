@@ -1,0 +1,9 @@
+import { useEffect,useState,type FormEvent } from 'react'
+import { getSupabase } from '../lib/supabase'
+import { Header,Field,Notice } from '../components/ui'
+export function Profile(){
+ const [profile,setProfile]=useState({full_name:'',phone:''}),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
+ useEffect(()=>{getSupabase().from('profiles').select('full_name,phone').single().then(({data})=>{if(data)setProfile({full_name:data.full_name,phone:data.phone??''})})},[])
+ async function save(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);try{const {data:{user}}=await getSupabase().auth.getUser();if(!user)throw new Error();const {error}=await getSupabase().from('profiles').update({full_name:String(f.get('name')),phone:String(f.get('phone'))}).eq('id',user.id);if(error)throw error;const password=String(f.get('password')??'');if(password){const {error}=await getSupabase().auth.updateUser({password});if(error)throw error}setNotice('Perfil atualizado.')}catch{setNotice('Não foi possível atualizar o perfil. Confira os dados.')}finally{setBusy(false)}}
+ return <><Header title="Meu perfil" subtitle="Seus dados pessoais e acesso."/><Notice text={notice}/><form className="panel form-grid" onSubmit={save} key={profile.full_name}><Field label="Nome"><input name="name" defaultValue={profile.full_name} required/></Field><Field label="Telefone"><input name="phone" type="tel" defaultValue={profile.phone}/></Field><Field label="Nova senha (opcional)"><input type="password" name="password" minLength={8} autoComplete="new-password"/></Field><button className="primary" disabled={busy}>Salvar perfil</button></form><button onClick={()=>void getSupabase().auth.signOut({scope:'global'})}>Encerrar todas as minhas sessões</button></>
+}

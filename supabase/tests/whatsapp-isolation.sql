@@ -1,0 +1,20 @@
+begin;
+insert into auth.users(id) values('97000000-0000-0000-0000-000000000001');
+insert into public.barbershops(id,name,slug) values('98000000-0000-0000-0000-000000000001','Teste Meta','teste-meta-transacional');
+insert into public.subscriptions(barbershop_id,plan,status) values('98000000-0000-0000-0000-000000000001','starter','active');
+insert into public.barbershop_members(barbershop_id,user_id,role) values('98000000-0000-0000-0000-000000000001','97000000-0000-0000-0000-000000000001','owner');
+insert into public.whatsapp_connections(barbershop_id) values('98000000-0000-0000-0000-000000000001');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000001',true);
+do $$ declare tenant uuid; begin
+ perform public.wa_begin('98000000-0000-0000-0000-000000000001','hash-teste-uso-unico');
+ tenant:=public.wa_consume('hash-teste-uso-unico');
+ if tenant<>'98000000-0000-0000-0000-000000000001' then raise exception 'Tenant OAuth incorreto'; end if;
+ begin perform public.wa_consume('hash-teste-uso-unico');raise exception 'Replay OAuth permitido'; exception when insufficient_privilege then null;end;
+ begin perform public.wa_save(tenant,'123','456','token-forjado');raise exception 'Cliente gravou credenciais';exception when insufficient_privilege then null;end;
+ begin perform public.wa_claim();raise exception 'Cliente acessou fila privada';exception when insufficient_privilege then null;end;
+ begin perform 1 from private.whatsapp_credentials;raise exception 'Cliente leu tokens';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+select 'OAuth vinculado ao tenant, uso único, credenciais e fila privadas: OK' as result;
+rollback;

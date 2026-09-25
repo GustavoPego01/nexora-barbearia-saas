@@ -1,0 +1,20 @@
+import { useEffect,useState } from 'react'
+import { useParams,Link } from 'react-router-dom'
+import { rpc,message,money,dateTime,type Row } from '../lib/api'
+import { Empty,Header,Notice } from '../components/ui'
+import type { Appointment } from './Booking'
+export function Commissions(){
+ const {tenant=''}=useParams(),[rows,setRows]=useState<Row[]>([]),[notice,setNotice]=useState('')
+ useEffect(()=>{const start=new Date();start.setDate(1);start.setHours(0,0,0,0);rpc<Row[]>('my_commissions',{tenant,from_date:start.toISOString(),until_date:new Date(Date.now()+86400000).toISOString()}).then(setRows).catch(e=>setNotice(message(e)))},[tenant])
+ return <><Header title="Minhas comissões" subtitle="Atendimentos pagos neste mês."/><Notice text={notice}/><div className="stats"><div><small>Total no mês</small><strong>{money(rows.reduce((s,r)=>s+Number(r.commission_cents),0))}</strong></div></div>{rows.length?rows.map(r=><div className="panel list-row" key={String(r.id)}><span>{dateTime(String(r.starts_at))}</span><strong>{money(Number(r.commission_cents))}</strong></div>):<Empty text="Sem comissões no período ou visualização não habilitada pelo proprietário."/>}</>
+}
+export function Reports({dashboard=false}:{dashboard?:boolean}){
+ const {tenant=''}=useParams(),[period,setPeriod]=useState('month'),[payments,setPayments]=useState<Row[]>([]),[appointments,setAppointments]=useState<Appointment[]>([]),[notice,setNotice]=useState('')
+ useEffect(()=>{const start=new Date(),end=new Date();end.setDate(end.getDate()+1);end.setHours(0,0,0,0);start.setHours(0,0,0,0);if(period==='month')start.setDate(1);if(period==='week')start.setDate(start.getDate()-6)
+ rpc<Row[]>('finance_report',{tenant,from_date:start.toISOString(),until_date:end.toISOString()}).then(setPayments).catch(e=>setNotice(message(e)))
+ rpc<Appointment[]>('agenda',{tenant,from_date:start.toISOString(),until_date:end.toISOString()}).then(setAppointments).catch(e=>setNotice(message(e)))
+ },[tenant,period])
+ const revenue=payments.reduce((s,r)=>s+Number(r.amount_cents),0),commissions=payments.reduce((s,r)=>s+Number(r.commission_cents),0)
+ const grouped=Object.entries(payments.reduce<Record<string,number>>((acc,r)=>{const name=String(r.professional_name);acc[name]=(acc[name]??0)+Number(r.commission_cents);return acc},{}))
+ return <><Header title={dashboard?'Visão geral':'Financeiro'} subtitle={dashboard?'Acompanhe o ritmo da sua barbearia.':'Receitas registradas na conclusão de cada atendimento.'}>{dashboard&&<Link className="primary" to={`/app/${tenant}/agenda`}>Abrir agenda →</Link>}</Header><div className="tabs">{[['today','Hoje'],['week','Semana'],['month','Mês']].map(([v,l])=><button key={v} className={period===v?'selected':''} onClick={()=>setPeriod(v!)}>{l}</button>)}</div><Notice text={notice}/><div className="stats"><div><small>Receita recebida</small><strong>{money(revenue)}</strong><span>{payments.length} pagamentos</span></div><div><small>Agendamentos</small><strong>{appointments.length}</strong><span>{new Set(appointments.map(a=>a.customer_id)).size} clientes</span></div><div><small>Cancelamentos</small><strong>{appointments.filter(a=>a.status==='cancelled').length}</strong><span>No período selecionado</span></div><div><small>Comissões</small><strong>{money(commissions)}</strong><span>Valores dos atendimentos concluídos</span></div></div><div className="panel"><h2>Comissões por profissional</h2>{grouped.length?grouped.map(([name,value])=><div className="chart-row" key={name}><span>{name}</span><meter min={0} max={Math.max(commissions,1)} value={value}/><strong>{money(value)}</strong></div>):<Empty text="Conclua um atendimento para registrar a primeira receita."/>}</div>{!dashboard&&<div className="panel table-scroll"><table><thead><tr><th>Data</th><th>Cliente / serviço</th><th>Profissional</th><th>Forma</th><th>Valor</th></tr></thead><tbody>{payments.map(p=><tr key={String(p.id)}><td>{dateTime(String(p.paid_at))}</td><td>{p.customer_name}<small>{p.service_name}</small></td><td>{p.professional_name}</td><td>{p.method}</td><td>{money(Number(p.amount_cents))}</td></tr>)}</tbody></table></div>}</>
+}

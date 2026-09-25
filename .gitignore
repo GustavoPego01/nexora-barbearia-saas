@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.local
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+coverage/
+*.log
+.DS_Store
+supabase/.temp/
+supabase/.branches/
+internal/
+.tools/
+.github-upload/
